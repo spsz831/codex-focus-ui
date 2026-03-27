@@ -5,6 +5,9 @@
 node_modules/
 .tmp/
 
+# Local data
+.data/
+
 # OS
 .DS_Store
 Thumbs.db
