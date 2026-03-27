@@ -17,11 +17,22 @@
     "test:smoke": "node scripts/smoke-test.js",
     "oneclick": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 start",
     "proxy:run": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 run",
+    "sync:codex": "node scripts/sync-codex-chat.js",
+    "service:start": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 service-start",
+    "service:stop": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 service-stop",
+    "service:status": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 service-status",
     "dev": "npm run dev:cli",
-    "sync:codex": "node scripts/sync-codex-chat.js"
+    "ui": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 ui",
+    "global:link": "npm link",
+    "global:unlink": "npm unlink -g codex-focus-ui",
+    "ui:menu": "powershell -ExecutionPolicy Bypass -File scripts/cfu-control.ps1 menu"
   },
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "bin": {
+    "cfu-ui": "scripts/cfu-ui.js"
+  }
 }
+

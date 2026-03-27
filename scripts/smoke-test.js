@@ -39,6 +39,9 @@ async function run() {
     assert(home.statusCode === 200, `viewer / status=${home.statusCode}`);
     assert(home.body.includes("codex-focus-ui v0.1.0"), "viewer version marker missing");
     assert(home.body.includes("floating-last-question"), "floating bar missing");
+    assert(home.body.includes("export-selected-markdown"), "selected export button missing");
+    assert(home.body.includes("select-visible-btn"), "select visible button missing");
+    assert(home.body.includes("clear-visible-btn"), "clear visible button missing");
 
     const api = await httpGet("http://127.0.0.1:3939/api/sessions");
     assert(api.statusCode === 200, `viewer /api/sessions status=${api.statusCode}`);
@@ -58,3 +61,4 @@ run().catch((err) => {
   console.error(`smoke_failed: ${err.message}`);
   process.exit(1);
 });
+

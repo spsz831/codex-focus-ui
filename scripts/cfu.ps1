@@ -4,6 +4,10 @@ $rest = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
+$serviceDir = Join-Path $repo '.data\service'
+$runnerPidFile = Join-Path $serviceDir 'runner.pid'
+$statusFile = Join-Path $serviceDir 'status.json'
+
 function Write-Usage {
   Write-Host 'Usage:' -ForegroundColor Yellow
   Write-Host '  .\\scripts\\cfu.ps1 start'
@@ -11,13 +15,32 @@ function Write-Usage {
   Write-Host '  .\\scripts\\cfu.ps1 demo'
   Write-Host '  .\\scripts\\cfu.ps1 sync [YYYY-MM-DD]'
   Write-Host '  .\\scripts\\cfu.ps1 run npm -v'
-  Write-Host '  .\\scripts\\cfu.ps1 run codex --version'
+  Write-Host '  .\\scripts\\cfu.ps1 service-start'
+  Write-Host '  .\\scripts\\cfu.ps1 service-stop'
+  Write-Host '  .\\scripts\\cfu.ps1 service-status'
 }
 
 function Run-Sync([string]$day) {
   $syncArgs = @('scripts/sync-codex-chat.js', '--day', "$day")
   & node @syncArgs
   return $LASTEXITCODE
+}
+
+function Read-RunnerPid {
+  if (-not (Test-Path $runnerPidFile)) { return $null }
+  $txt = (Get-Content $runnerPidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+  if (-not $txt) { return $null }
+  return [int]$txt
+}
+
+function Is-Running([int]$procId) {
+  if (-not $procId) { return $false }
+  try {
+    $null = Get-Process -Id $procId -ErrorAction Stop
+    return $true
+  } catch {
+    return $false
+  }
 }
 
 if ($action -eq 'doctor') {
@@ -48,6 +71,84 @@ if ($action -eq 'run') {
   exit $LASTEXITCODE
 }
 
+
+if ($action -eq 'ui') {
+  $runnerPid = Read-RunnerPid
+  if (-not ($runnerPid -and (Is-Running -procId $runnerPid))) {
+    New-Item -ItemType Directory -Path $serviceDir -Force | Out-Null
+    Start-Process -FilePath node -ArgumentList 'scripts/service-runner.js' -WorkingDirectory $repo -WindowStyle Hidden | Out-Null
+    Start-Sleep -Seconds 1
+    $runnerPid = Read-RunnerPid
+    if (-not ($runnerPid -and (Is-Running -procId $runnerPid))) {
+      Write-Host 'Service failed to start. Check .data/service/service.log' -ForegroundColor Red
+      exit 1
+    }
+  }
+
+  $today = Get-Date -Format 'yyyy-MM-dd'
+  $targetSession = "codex-auto-$today.jsonl"
+  Start-Process "http://127.0.0.1:3939/?session=$targetSession" | Out-Null
+  Write-Host "Opened: http://127.0.0.1:3939/?session=$targetSession" -ForegroundColor Green
+  exit 0
+}
+if ($action -eq 'service-start') {
+  $runnerPid = Read-RunnerPid
+  if ($runnerPid -and (Is-Running -procId $runnerPid)) {
+    Write-Host "Service already running (PID: $runnerPid)." -ForegroundColor Cyan
+    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Cyan
+    exit 0
+  }
+
+  New-Item -ItemType Directory -Path $serviceDir -Force | Out-Null
+  Start-Process -FilePath node -ArgumentList 'scripts/service-runner.js' -WorkingDirectory $repo -WindowStyle Hidden | Out-Null
+  Start-Sleep -Seconds 1
+
+  $runnerPid2 = Read-RunnerPid
+  if ($runnerPid2 -and (Is-Running -procId $runnerPid2)) {
+    Write-Host "Service started (PID: $runnerPid2)." -ForegroundColor Green
+    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Green
+    exit 0
+  }
+
+  Write-Host 'Service failed to start. Check .data/service/service.log' -ForegroundColor Red
+  exit 1
+}
+
+if ($action -eq 'service-stop') {
+  $runnerPid = Read-RunnerPid
+  if (-not $runnerPid) {
+    Write-Host 'Service is not running.' -ForegroundColor Yellow
+    exit 0
+  }
+
+  if (Is-Running -procId $runnerPid) {
+    Stop-Process -Id $runnerPid -Force
+    Start-Sleep -Milliseconds 400
+    Write-Host "Service stopped (PID: $runnerPid)." -ForegroundColor Green
+  } else {
+    Write-Host 'Service pid file exists but process not running, cleaned.' -ForegroundColor Yellow
+  }
+
+  if (Test-Path $runnerPidFile) { Remove-Item $runnerPidFile -Force }
+  exit 0
+}
+
+if ($action -eq 'service-status') {
+  $runnerPid = Read-RunnerPid
+  if ($runnerPid -and (Is-Running -procId $runnerPid)) {
+    Write-Host "Service: RUNNING (PID: $runnerPid)" -ForegroundColor Green
+    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Green
+    if (Test-Path $statusFile) {
+      Write-Host ''
+      Get-Content $statusFile
+    }
+    exit 0
+  }
+
+  Write-Host 'Service: STOPPED' -ForegroundColor Yellow
+  exit 0
+}
+
 if ($action -ne 'start') {
   Write-Host "Unknown action: $action" -ForegroundColor Red
   Write-Usage
@@ -76,3 +177,7 @@ if (-not $existing) {
 Start-Process "http://127.0.0.1:3939/?session=$targetSession" | Out-Null
 Write-Host "Opened: http://127.0.0.1:3939/?session=$targetSession" -ForegroundColor Green
 exit 0
+
+
+
+

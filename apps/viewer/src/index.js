@@ -150,21 +150,24 @@ function buildSearchText(item) {
   return parts.join(" ");
 }
 
-function filterEntriesForExport(entries, mode, keyword, bookmarksSet) {
+function filterEntriesForExport(entries, mode, keyword, bookmarksSet, selectedSet = new Set(), selectedOnly = false) {
   const kw = String(keyword || "").trim().toLowerCase();
   return entries.filter((item, idx) => {
     const type = item.type || "broken";
     const id = `entry-${idx}`;
     const search = buildSearchText(item).toLowerCase();
+    const selectedHit = selectedSet.has(id);
+    if (selectedOnly) return selectedHit;
     const modeHit = mode === "all" || type === mode || (mode === "bookmarked" && bookmarksSet.has(id));
     const keywordHit = !kw || search.includes(kw);
     return modeHit && keywordHit;
   });
 }
 
-function renderExportMarkdown(sessionPath, entries, mode, keyword, bookmarksCsv) {
+function renderExportMarkdown(sessionPath, entries, mode, keyword, bookmarksCsv, selectedCsv, selectedOnly) {
   const bookmarksSet = new Set(String(bookmarksCsv || "").split(",").map((v) => v.trim()).filter(Boolean));
-  const filtered = filterEntriesForExport(entries, mode, keyword, bookmarksSet);
+  const selectedSet = new Set(String(selectedCsv || "").split(",").map((v) => v.trim()).filter(Boolean));
+  const filtered = filterEntriesForExport(entries, mode, keyword, bookmarksSet, selectedSet, Boolean(selectedOnly));
   const summary = makeSummary(filtered);
   const sessionName = sessionPath ? path.basename(sessionPath) : "no-session";
 
@@ -245,20 +248,32 @@ function renderEntry(item, index, lastUserIndex) {
   const extraClass = isLastUser ? " last-user-question" : "";
   const searchable = escapeHtml(buildSearchText(item)).toLowerCase();
 
-  const body = item.type === "user"
-    ? `<h3>你的提问</h3><div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
+  const title = item.type === "user"
+    ? "你的提问"
     : item.type === "assistant"
-      ? `<h3>助手回答</h3><div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
+      ? "助手回答"
       : item.type === "command"
-        ? (() => {
-            const status = Number(item.exitCode) === 0 ? "success" : "failed";
-            const statusLabel = status === "success" ? "✅ 成功" : "❌ 失败";
-            return `<h3>命令过程 <span class="status ${status}">${statusLabel}</span></h3><p><code>${escapeHtml(item.command)}</code></p><p class="dim">来源: ${escapeHtml(item.source || "unknown")} | 耗时: ${escapeHtml(item.durationMs || "-")}ms</p><details><summary>查看命令输出（默认折叠）</summary><pre>${escapeHtml(item.output || "(无输出)")}</pre></details><small>${escapeHtml(item.ts)}</small>`;
-          })()
-        : `<h3>未识别记录</h3><pre>${escapeHtml(JSON.stringify(item, null, 2))}</pre>`;
+        ? "命令过程"
+        : "未识别记录";
+
+  const headerMeta = item.type === "command"
+    ? (() => {
+        const status = Number(item.exitCode) === 0 ? "success" : "failed";
+        const statusLabel = status === "success" ? "✅ 成功" : "❌ 失败";
+        return `<span class="status ${status}">${statusLabel}</span>`;
+      })()
+    : "";
+
+  const body = item.type === "user"
+    ? `<div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
+    : item.type === "assistant"
+      ? `<div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
+      : item.type === "command"
+        ? `<p><code>${escapeHtml(item.command)}</code></p><p class="dim">来源: ${escapeHtml(item.source || "unknown")} | 耗时: ${escapeHtml(item.durationMs || "-")}ms</p><details><summary>查看命令输出（默认折叠）</summary><pre>${escapeHtml(item.output || "(无输出)")}</pre></details><small>${escapeHtml(item.ts)}</small>`
+        : `<pre>${escapeHtml(JSON.stringify(item, null, 2))}</pre>`;
 
   const type = item.type || "broken";
-  return `<article${anchorId} data-id="entry-${index}" data-type="${type}" data-search="${searchable}" class="card ${type}${extraClass}"><button class="bookmark-btn" type="button" data-bookmark-toggle="entry-${index}">☆ 书签</button>${body}</article>`;
+  return `<article${anchorId} data-id="entry-${index}" data-type="${type}" data-search="${searchable}" class="card ${type}${extraClass}"><div class="card-topline"><label class="select-toggle"><input type="checkbox" data-select-toggle="entry-${index}" /> 勾选</label><div class="card-heading"><h3>${title}</h3>${headerMeta}</div><button class="bookmark-btn" type="button" data-bookmark-toggle="entry-${index}">☆ 书签</button></div>${body}</article>`;
 }
 
 function renderPage(sessionPath, sessionName, sessionNames, entries) {
@@ -297,9 +312,13 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
     .digest-list li { margin: 5px 0; }
     .list { display: grid; gap: 12px; }
     .card { position: relative; background: #151515; border: 1px solid #2d2d2d; border-radius: 12px; padding: 14px; }
-    .bookmark-btn { position: absolute; right: 10px; top: 10px; border: 1px solid #454545; background: #1f1f1f; color: #dadada; border-radius: 999px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
+    .card-topline { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .card-heading { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+    .bookmark-btn { border: 1px solid #454545; background: #1f1f1f; color: #dadada; border-radius: 999px; padding: 2px 8px; cursor: pointer; font-size: 12px; margin-left: auto; flex-shrink: 0; }
+    .select-toggle { font-size: 12px; color: #cfcfcf; display: inline-flex; gap: 6px; align-items: center; user-select: none; white-space: nowrap; flex-shrink: 0; }
+    .selected { border-color: #4f9b5d; box-shadow: inset 0 0 0 1px rgba(112, 211, 132, 0.35); }
     .bookmark-btn.active { border-color: #dcb95a; color: #ffd877; background: #2a2410; }
-    .card h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .card h3 { margin: 0; font-size: 16px; }
     .card p { margin: 0 0 8px 0; line-height: 1.5; }
     .card small { color: #9a9a9a; }
     .md-content { line-height: 1.65; margin-bottom: 8px; color: #e7e7e7; }
@@ -315,6 +334,8 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
     .last-user-question { border-color: #69d6ff; box-shadow: inset 0 0 0 1px rgba(105, 214, 255, 0.55), 0 0 0 1px rgba(105, 214, 255, 0.15); }
     .bookmarked { border-color: #7b6730; box-shadow: inset 0 0 0 1px rgba(220, 185, 90, 0.35); }
     .floating-last-question { position: fixed; left: 16px; right: 16px; bottom: 12px; z-index: 999; background: rgba(17, 17, 17, 0.96); border: 1px solid #2f6d88; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+    .floating-scroll-nav { position: fixed; right: 16px; bottom: 84px; z-index: 1000; display: flex; gap: 8px; }
+    .floating-scroll-nav .mini-btn { border: 1px solid #3f3f3f; background: rgba(22, 22, 22, 0.95); color: #d8d8d8; border-radius: 8px; padding: 7px 10px; cursor: pointer; }
     .floating-last-question .label { color: #9fdfff; font-size: 12px; }
     .floating-last-question .text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #eaf7ff; }
     .floating-last-question .mini-btn { border: 1px solid #3f3f3f; background: #1b1b1b; color: #d8d8d8; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
@@ -334,9 +355,7 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       <label class="dim" for="session-select">会话:</label>
       <select id="session-select" class="select">${renderSessionOptions(sessionNames, sessionName)}</select>
       <button id="session-delete" class="btn danger" title="删除当前会话文件">删除会话</button>
-      <button id="jump-last-question" class="btn">定位上一轮提问</button>
-      <button id="scroll-top" class="btn alt">到顶部</button>
-      <button id="scroll-bottom" class="btn alt">到底部</button>
+      <button id="jump-last-question" class="btn">定位上一轮提问</button>
       <button data-mode="all" class="btn alt mode-btn active">全部</button>
       <button data-mode="user" class="btn alt mode-btn">仅提问</button>
       <button data-mode="assistant" class="btn alt mode-btn">仅回答</button>
@@ -345,6 +364,9 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       <input id="keyword-input" class="input" type="text" placeholder="搜索关键词（命令/问题/回答）" />
       <button id="clear-search" class="btn alt">清空搜索</button>
       <button id="export-markdown" class="btn">导出 Markdown</button>
+      <button id="export-selected-markdown" class="btn alt">导出勾选</button>
+      <button id="select-visible-btn" class="btn alt">全选当前可见</button>
+      <button id="clear-visible-btn" class="btn alt">取消全选当前可见</button>
     </section>
     <section class="summary">
       <p><strong>当前会话：</strong> ${escapeHtml(sessionPath || "未找到会话文件")}</p>
@@ -357,6 +379,11 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
     </section>
     <section id="entry-list" class="list">${cards || '<article class="card">暂无会话数据，请先运行 capture/demo/proxy。</article>'}</section>
   </main>
+
+  <section class="floating-scroll-nav" aria-label="页面快速滚动">
+    <button id="scroll-top" class="mini-btn" type="button">到顶部</button>
+    <button id="scroll-bottom" class="mini-btn" type="button">到底部</button>
+  </section>
 
   <section id="floating-last-question" class="floating-last-question">
     <span class="label">上一问</span>
@@ -375,6 +402,9 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       const keywordInput = document.getElementById('keyword-input');
       const clearSearchBtn = document.getElementById('clear-search');
       const exportBtn = document.getElementById('export-markdown');
+      const exportSelectedBtn = document.getElementById('export-selected-markdown');
+      const selectVisibleBtn = document.getElementById('select-visible-btn');
+      const clearVisibleBtn = document.getElementById('clear-visible-btn');
       const sessionSelect = document.getElementById('session-select');
       const floatingJumpBtn = document.getElementById('floating-jump');
       const floatingCopyBtn = document.getElementById('floating-copy');
@@ -382,13 +412,19 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       const sessionPath = ${JSON.stringify(sessionPath || 'no-session')};
       const lastQuestionText = ${JSON.stringify(summary.lastQuestion || "")};
       const bookmarkStorageKey = 'codex-focus-ui:bookmarks:' + sessionPath;
+      const selectedStorageKey = 'codex-focus-ui:selected:' + sessionPath;
 
       let mode = 'all';
       let keyword = '';
       const bookmarks = new Set(JSON.parse(localStorage.getItem(bookmarkStorageKey) || '[]'));
+      const selected = new Set(JSON.parse(localStorage.getItem(selectedStorageKey) || '[]'));
 
       const saveBookmarks = () => {
         localStorage.setItem(bookmarkStorageKey, JSON.stringify(Array.from(bookmarks)));
+      };
+
+      const saveSelected = () => {
+        localStorage.setItem(selectedStorageKey, JSON.stringify(Array.from(selected)));
       };
 
       const syncBookmarkUI = () => {
@@ -403,6 +439,24 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
             btn.textContent = marked ? '★ 书签' : '☆ 书签';
           }
         });
+      };
+
+      const syncSelectedUI = () => {
+        const cards = list.querySelectorAll('[data-id]');
+        cards.forEach((card) => {
+          const id = card.getAttribute('data-id');
+          const marked = selected.has(id);
+          card.classList.toggle('selected', marked);
+          const box = card.querySelector('[data-select-toggle]');
+          if (box) box.checked = marked;
+        });
+      };
+
+      const getVisibleEntryIds = () => {
+        return Array.from(list.querySelectorAll('[data-id]'))
+          .filter((card) => !card.classList.contains('hidden'))
+          .map((card) => card.getAttribute('data-id'))
+          .filter(Boolean);
       };
 
       const applyFilter = () => {
@@ -486,6 +540,34 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
         window.location.href = '/export.md?' + params.toString();
       });
 
+      exportSelectedBtn?.addEventListener('click', () => {
+        if (!selected.size) {
+          alert('请先勾选至少一条记录再导出。');
+          return;
+        }
+        const params = new URLSearchParams({
+          mode,
+          keyword,
+          bookmarks: Array.from(bookmarks).join(','),
+          selected: Array.from(selected).join(','),
+          selectedOnly: '1'
+        });
+        if (sessionSelect?.value) params.set('session', sessionSelect.value);
+        window.location.href = '/export.md?' + params.toString();
+      });
+
+      selectVisibleBtn?.addEventListener('click', () => {
+        getVisibleEntryIds().forEach((id) => selected.add(id));
+        saveSelected();
+        syncSelectedUI();
+      });
+
+      clearVisibleBtn?.addEventListener('click', () => {
+        getVisibleEntryIds().forEach((id) => selected.delete(id));
+        saveSelected();
+        syncSelectedUI();
+      });
+
       deleteBtn?.addEventListener('click', async () => {
         const target = sessionSelect?.value || '';
         if (!target) return;
@@ -528,6 +610,17 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
         });
       });
 
+      list.querySelectorAll('[data-select-toggle]').forEach((box) => {
+        box.addEventListener('change', () => {
+          const id = box.getAttribute('data-select-toggle');
+          if (!id) return;
+          if (box.checked) selected.add(id);
+          else selected.delete(id);
+          saveSelected();
+          syncSelectedUI();
+        });
+      });
+
       document.addEventListener('keydown', (e) => {
         const targetTag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
         const typing = targetTag === 'input' || targetTag === 'textarea';
@@ -554,6 +647,7 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       });
 
       syncBookmarkUI();
+      syncSelectedUI();
       applyFilter();
     })();
   </script>
@@ -579,7 +673,9 @@ function startServer() {
         const mode = url.searchParams.get("mode") || "all";
         const keyword = url.searchParams.get("keyword") || "";
         const bookmarks = url.searchParams.get("bookmarks") || "";
-        const md = renderExportMarkdown(payload.sessionPath, payload.entries, mode, keyword, bookmarks);
+        const selected = url.searchParams.get("selected") || "";
+        const selectedOnly = url.searchParams.get("selectedOnly") === "1";
+        const md = renderExportMarkdown(payload.sessionPath, payload.entries, mode, keyword, bookmarks, selected, selectedOnly);
         res.writeHead(200, {
           "Content-Type": "text/markdown; charset=utf-8",
           "Content-Disposition": "attachment; filename=codex-focus-export.md"
@@ -622,6 +718,13 @@ function startServer() {
 }
 
 startServer();
+
+
+
+
+
+
+
 
 
 
