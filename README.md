@@ -2,6 +2,31 @@
 
 v0.1.0 是当前稳定收口版，目标是让你在 5-10 秒内定位上一轮提问，并减少无关输出干扰。
 
+## Latest Release
+
+- Version: `v0.1.0`
+- Release: https://github.com/spsz831/codex-focus-ui/releases/tag/v0.1.0
+- Status: Stable
+
+### Highlights
+
+- 默认折叠命令输出，保留关键过程摘要
+- 一键定位上一问（按钮 + `J` 快捷键）
+- `/` 快速聚焦搜索框
+- 类型过滤：`全部 / 仅提问 / 仅回答 / 仅命令 / 仅书签`
+- 关键词搜索（问题、回答、命令、输出）
+- 会话书签（本地保存）
+- 历史会话切换（按 `.jsonl` 文件）
+- 悬浮上一问栏（定位 + 复制）
+- 按当前筛选条件导出 Markdown 复盘清单
+
+### Stability
+
+- 配置文件：`codex-focus-ui.config.json`
+- CLI 诊断命令：`npm run doctor`
+- 最小冒烟测试：`npm run test:smoke`
+- Viewer 请求异常兜底与错误提示
+
 ## v0.1.0 能力
 
 - 命令输出默认折叠，顶部保留过程摘要。
