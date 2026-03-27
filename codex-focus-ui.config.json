@@ -1,0 +1,7 @@
+{
+  "dataDir": ".data",
+  "viewerPort": 3939,
+  "cli": {
+    "maxOutputChars": 200000
+  }
+}
