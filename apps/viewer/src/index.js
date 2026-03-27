@@ -19,6 +19,10 @@ function listSessionFiles() {
     .sort();
 }
 
+function isSafeSessionName(name) {
+  return /^[a-zA-Z0-9._-]+\.jsonl$/.test(String(name || ""));
+}
+
 function resolveSessionPath(sessionName) {
   const names = listSessionFiles();
   if (!names.length) return null;
@@ -51,13 +55,50 @@ function loadSessionByName(sessionName) {
   };
 }
 
+function deleteSessionByName(sessionName) {
+  if (!isSafeSessionName(sessionName)) {
+    return { ok: false, error: "invalid session name" };
+  }
+
+  const full = path.join(DATA_DIR, sessionName);
+  if (!fs.existsSync(full)) {
+    return { ok: false, error: "session not found" };
+  }
+
+  fs.unlinkSync(full);
+  const remaining = listSessionFiles();
+  const next = remaining.length ? remaining[remaining.length - 1] : "";
+  return { ok: true, deleted: sessionName, next };
+}
+
 function escapeHtml(text) {
   return String(text || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function renderMarkdown(text) {
+  const src = escapeHtml(text || "");
+  const blocks = [];
+
+  let output = src.replace(/```([\s\S]*?)```/g, (_, code) => {
+    const token = `__CODE_BLOCK_${blocks.length}__`;
+    blocks.push(`<pre><code>${code}</code></pre>`);
+    return token;
+  });
+
+  output = output
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\n/g, "<br>");
+
+  output = output.replace(/__CODE_BLOCK_(\d+)__/g, (_, idx) => blocks[Number(idx)] || "");
+  return output;
 }
 
 function makeSummary(entries) {
@@ -144,7 +185,10 @@ function renderExportMarkdown(sessionPath, entries, mode, keyword, bookmarksCsv)
       lines.push(`## ${no}. 提问`);
       lines.push("");
       lines.push(`- 时间: ${item.ts || ""}`);
-      lines.push(`- 内容: ${String(item.text || "").replace(/\n/g, " ")}`);
+      lines.push(`- 内容:`);
+      lines.push("```markdown");
+      lines.push(String(item.text || ""));
+      lines.push("```");
       lines.push("");
       return;
     }
@@ -153,7 +197,10 @@ function renderExportMarkdown(sessionPath, entries, mode, keyword, bookmarksCsv)
       lines.push(`## ${no}. 回答`);
       lines.push("");
       lines.push(`- 时间: ${item.ts || ""}`);
-      lines.push(`- 内容: ${String(item.text || "").replace(/\n/g, " ")}`);
+      lines.push(`- 内容:`);
+      lines.push("```markdown");
+      lines.push(String(item.text || ""));
+      lines.push("```");
       lines.push("");
       return;
     }
@@ -199,9 +246,9 @@ function renderEntry(item, index, lastUserIndex) {
   const searchable = escapeHtml(buildSearchText(item)).toLowerCase();
 
   const body = item.type === "user"
-    ? `<h3>你的提问</h3><p>${escapeHtml(item.text)}</p><small>${escapeHtml(item.ts)}</small>`
+    ? `<h3>你的提问</h3><div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
     : item.type === "assistant"
-      ? `<h3>助手回答</h3><p>${escapeHtml(item.text)}</p><small>${escapeHtml(item.ts)}</small>`
+      ? `<h3>助手回答</h3><div class="md-content">${renderMarkdown(item.text)}</div><small>${escapeHtml(item.ts)}</small>`
       : item.type === "command"
         ? (() => {
             const status = Number(item.exitCode) === 0 ? "success" : "failed";
@@ -238,6 +285,7 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; align-items: center; }
     .btn { border: 1px solid #2f6d88; background: #13212b; color: #8edfff; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
     .btn.alt { border-color: #3a3a3a; background: #1a1a1a; color: #d0d0d0; }
+    .btn.danger { border-color: #7a3a3a; background: #2a1212; color: #ffb7b7; }
     .btn.active { border-color: #69d6ff; color: #d4f2ff; box-shadow: inset 0 0 0 1px rgba(105, 214, 255, 0.3); }
     .input, .select { border: 1px solid #3a3a3a; background: #141414; color: #f2f2f2; border-radius: 8px; padding: 8px 10px; min-width: 220px; }
     .summary { background: #171717; border: 1px solid #2b2b2b; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
@@ -254,6 +302,9 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
     .card h3 { margin: 0 0 8px 0; font-size: 16px; }
     .card p { margin: 0 0 8px 0; line-height: 1.5; }
     .card small { color: #9a9a9a; }
+    .md-content { line-height: 1.65; margin-bottom: 8px; color: #e7e7e7; }
+    .md-content pre { background: #101010; border: 1px solid #303030; border-radius: 8px; padding: 10px; white-space: pre-wrap; word-break: break-word; }
+    .md-content a { color: #7fd7ff; text-decoration: underline; }
     .dim { color: #a0a0a0; }
     .user { border-color: #2f6d88; box-shadow: inset 0 0 0 1px rgba(111, 211, 255, 0.25); }
     .assistant { border-color: #434343; }
@@ -278,11 +329,14 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
   <main class="wrap">
     <section class="title">codex-focus-ui v0.1.0</section>
     ${CONFIG._configError ? `<section class="warning">配置文件异常：${escapeHtml(CONFIG._configError)}，当前已回退默认配置。</section>` : ""}
-    <section class="hotkeys">快捷键：<code>J</code> 定位上一轮提问，<code>/</code> 聚焦搜索框。</section>
+    <section class="hotkeys">快捷键：<code>J</code> 定位上一轮提问，<code>/</code> 聚焦搜索框，<code>T</code>/<code>B</code> 快速到顶部/底部。</section>
     <section class="toolbar">
       <label class="dim" for="session-select">会话:</label>
       <select id="session-select" class="select">${renderSessionOptions(sessionNames, sessionName)}</select>
+      <button id="session-delete" class="btn danger" title="删除当前会话文件">删除会话</button>
       <button id="jump-last-question" class="btn">定位上一轮提问</button>
+      <button id="scroll-top" class="btn alt">到顶部</button>
+      <button id="scroll-bottom" class="btn alt">到底部</button>
       <button data-mode="all" class="btn alt mode-btn active">全部</button>
       <button data-mode="user" class="btn alt mode-btn">仅提问</button>
       <button data-mode="assistant" class="btn alt mode-btn">仅回答</button>
@@ -314,6 +368,9 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
   <script>
     (() => {
       const jumpBtn = document.getElementById('jump-last-question');
+      const deleteBtn = document.getElementById('session-delete');
+      const scrollTopBtn = document.getElementById('scroll-top');
+      const scrollBottomBtn = document.getElementById('scroll-bottom');
       const modeBtns = Array.from(document.querySelectorAll('.mode-btn'));
       const keywordInput = document.getElementById('keyword-input');
       const clearSearchBtn = document.getElementById('clear-search');
@@ -396,6 +453,8 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
       };
 
       jumpBtn?.addEventListener('click', jumpLastQuestion);
+      scrollTopBtn?.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      scrollBottomBtn?.addEventListener('click', () => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); });
       floatingJumpBtn?.addEventListener('click', jumpLastQuestion);
       floatingCopyBtn?.addEventListener('click', copyLastQuestion);
 
@@ -427,6 +486,28 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
         window.location.href = '/export.md?' + params.toString();
       });
 
+      deleteBtn?.addEventListener('click', async () => {
+        const target = sessionSelect?.value || '';
+        if (!target) return;
+        const ok = confirm('确认删除会话文件：' + target + ' ？');
+        if (!ok) return;
+
+        try {
+          const r = await fetch('/api/session/delete?name=' + encodeURIComponent(target));
+          const j = await r.json();
+          if (!j.ok) {
+            alert('删除失败: ' + (j.error || 'unknown'));
+            return;
+          }
+          const params = new URLSearchParams(window.location.search);
+          if (j.next) params.set('session', j.next);
+          else params.delete('session');
+          window.location.href = '/?' + params.toString();
+        } catch (err) {
+          alert('删除失败: ' + err.message);
+        }
+      });
+
       sessionSelect?.addEventListener('change', () => {
         const v = sessionSelect.value;
         const params = new URLSearchParams(window.location.search);
@@ -454,6 +535,16 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
         if (!typing && e.key.toLowerCase() === 'j') {
           e.preventDefault();
           jumpLastQuestion();
+          return;
+        }
+        if (!typing && e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        if (!typing && e.key.toLowerCase() === 'b') {
+          e.preventDefault();
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
           return;
         }
         if (!typing && e.key === '/') {
@@ -507,6 +598,14 @@ function startServer() {
         return;
       }
 
+      if (url.pathname === "/api/session/delete") {
+        const name = url.searchParams.get("name") || "";
+        const result = deleteSessionByName(name);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(result));
+        return;
+      }
+
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Not Found");
     } catch (err) {
@@ -518,11 +617,12 @@ function startServer() {
 
   server.listen(PORT, () => {
     console.log(`[codex-focus-ui viewer] v0.1.0 running at http://127.0.0.1:${PORT}`);
-    console.log("默认行为：命令输出折叠，支持悬浮上一问、会话切换、过滤、搜索、书签、Markdown 导出。");
+    console.log("默认行为：命令输出折叠，支持悬浮上一问、会话切换、过滤、搜索、书签、Markdown 导出、会话删除。");
   });
 }
 
 startServer();
+
 
 
 

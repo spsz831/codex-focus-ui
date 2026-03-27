@@ -15,7 +15,10 @@
     "doctor": "node apps/cli/src/index.js doctor",
     "start": "node apps/viewer/src/index.js",
     "test:smoke": "node scripts/smoke-test.js",
-    "dev": "npm run dev:cli"
+    "oneclick": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 start",
+    "proxy:run": "powershell -ExecutionPolicy Bypass -File scripts/cfu.ps1 run",
+    "dev": "npm run dev:cli",
+    "sync:codex": "node scripts/sync-codex-chat.js"
   },
   "engines": {
     "node": ">=20.0.0"
