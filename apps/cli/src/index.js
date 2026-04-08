@@ -3,10 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
-const { loadProjectConfig } = require("../../../packages/shared/src/config");
+const { loadProjectConfig, getProjectMeta } = require("../../../packages/shared/src/config");
 
 const ROOT = path.resolve(__dirname, "../../../");
 const CONFIG = loadProjectConfig(ROOT);
+const META = getProjectMeta(ROOT);
 const DATA_DIR = path.resolve(ROOT, CONFIG.dataDir || ".data", "sessions");
 const MAX_OUTPUT = Number((CONFIG.cli && CONFIG.cli.maxOutputChars) || 200000);
 
@@ -141,13 +142,15 @@ function runProxy(rawArgs, parsedArgs) {
   const sessionPath = parseSessionPath(parsedArgs);
   const reqId = `${Date.now()}`;
   const startedAt = Date.now();
+  const command = commandParts[0];
+  const commandArgs = commandParts.slice(1);
   const commandString = commandParts.join(" ");
   let output = "";
 
-  const child = spawn(commandString, {
+  const child = spawn(command, commandArgs, {
     cwd: process.cwd(),
     env: process.env,
-    shell: true,
+    shell: false,
     windowsHide: false
   });
 
@@ -196,7 +199,7 @@ function runProxy(rawArgs, parsedArgs) {
 }
 
 function commandDoctor() {
-  console.log("codex-focus-ui doctor v0.1.0");
+  console.log(`codex-focus-ui doctor v${META.version}`);
   console.log(`- root: ${ROOT}`);
   console.log(`- dataDir: ${DATA_DIR}`);
   console.log(`- maxOutputChars: ${MAX_OUTPUT}`);
@@ -218,7 +221,7 @@ function commandDoctor() {
 }
 
 function printHelp() {
-  console.log("codex-focus-ui cli v0.1.0");
+  console.log(`codex-focus-ui cli v${META.version}`);
   console.log("");
   console.log("Usage:");
   console.log("  node apps/cli/src/index.js capture --q <text> --a <text> --cmd <command> --output <stdout>");

@@ -4,9 +4,31 @@ $rest = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
+$configPath = Join-Path $repo 'codex-focus-ui.config.json'
 $serviceDir = Join-Path $repo '.data\service'
 $runnerPidFile = Join-Path $serviceDir 'runner.pid'
 $statusFile = Join-Path $serviceDir 'status.json'
+
+function Get-ViewerPort {
+  $defaultPort = 3939
+  if ($env:CODEX_FOCUS_UI_PORT) {
+    return [int]$env:CODEX_FOCUS_UI_PORT
+  }
+  if (-not (Test-Path $configPath)) {
+    return $defaultPort
+  }
+  try {
+    $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+    if ($cfg.viewerPort) {
+      return [int]$cfg.viewerPort
+    }
+  } catch {
+  }
+  return $defaultPort
+}
+
+$viewerPort = Get-ViewerPort
+$viewerUrl = "http://127.0.0.1:$viewerPort"
 
 function Write-Usage {
   Write-Host 'Usage:' -ForegroundColor Yellow
@@ -87,15 +109,15 @@ if ($action -eq 'ui') {
 
   $today = Get-Date -Format 'yyyy-MM-dd'
   $targetSession = "codex-auto-$today.jsonl"
-  Start-Process "http://127.0.0.1:3939/?session=$targetSession" | Out-Null
-  Write-Host "Opened: http://127.0.0.1:3939/?session=$targetSession" -ForegroundColor Green
+  Start-Process "$viewerUrl/?session=$targetSession" | Out-Null
+  Write-Host "Opened: $viewerUrl/?session=$targetSession" -ForegroundColor Green
   exit 0
 }
 if ($action -eq 'service-start') {
   $runnerPid = Read-RunnerPid
   if ($runnerPid -and (Is-Running -procId $runnerPid)) {
     Write-Host "Service already running (PID: $runnerPid)." -ForegroundColor Cyan
-    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Cyan
+    Write-Host "Viewer: $viewerUrl" -ForegroundColor Cyan
     exit 0
   }
 
@@ -106,7 +128,7 @@ if ($action -eq 'service-start') {
   $runnerPid2 = Read-RunnerPid
   if ($runnerPid2 -and (Is-Running -procId $runnerPid2)) {
     Write-Host "Service started (PID: $runnerPid2)." -ForegroundColor Green
-    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Green
+    Write-Host "Viewer: $viewerUrl" -ForegroundColor Green
     exit 0
   }
 
@@ -137,7 +159,7 @@ if ($action -eq 'service-status') {
   $runnerPid = Read-RunnerPid
   if ($runnerPid -and (Is-Running -procId $runnerPid)) {
     Write-Host "Service: RUNNING (PID: $runnerPid)" -ForegroundColor Green
-    Write-Host 'Viewer: http://127.0.0.1:3939' -ForegroundColor Green
+    Write-Host "Viewer: $viewerUrl" -ForegroundColor Green
     if (Test-Path $statusFile) {
       Write-Host ''
       Get-Content $statusFile
@@ -174,8 +196,8 @@ if (-not $existing) {
   Write-Host 'Viewer already running.' -ForegroundColor Cyan
 }
 
-Start-Process "http://127.0.0.1:3939/?session=$targetSession" | Out-Null
-Write-Host "Opened: http://127.0.0.1:3939/?session=$targetSession" -ForegroundColor Green
+Start-Process "$viewerUrl/?session=$targetSession" | Out-Null
+Write-Host "Opened: $viewerUrl/?session=$targetSession" -ForegroundColor Green
 exit 0
 
 

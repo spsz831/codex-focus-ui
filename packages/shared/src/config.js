@@ -31,6 +31,27 @@ function loadProjectConfig(rootDir) {
   }
 }
 
+function getProjectMeta(rootDir) {
+  const pkgPath = path.join(rootDir, "package.json");
+  const fallback = {
+    name: "codex-focus-ui",
+    version: "0.0.0"
+  };
+
+  if (!fs.existsSync(pkgPath)) return fallback;
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    return {
+      name: parsed.name || fallback.name,
+      version: parsed.version || fallback.version
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 module.exports = {
-  loadProjectConfig
+  loadProjectConfig,
+  getProjectMeta
 };

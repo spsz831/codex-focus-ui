@@ -4,10 +4,11 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 
-const { loadProjectConfig } = require("../../../packages/shared/src/config");
+const { loadProjectConfig, getProjectMeta } = require("../../../packages/shared/src/config");
 
 const ROOT = path.resolve(__dirname, "../../../");
 const CONFIG = loadProjectConfig(ROOT);
+const META = getProjectMeta(ROOT);
 const DATA_DIR = path.resolve(ROOT, CONFIG.dataDir || ".data", "sessions");
 const PORT = Number(process.env.CODEX_FOCUS_UI_PORT || CONFIG.viewerPort || 3939);
 
@@ -290,7 +291,7 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>codex-focus-ui viewer v0.1.0</title>
+  <title>codex-focus-ui viewer v${escapeHtml(META.version)}</title>
   <style>
     .warning { margin: 8px 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid #5a3b2d; background: #2a1a14; color: #ffd8c8; }
     body { margin: 0; padding: 24px; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0b0b0b; color: #f3f3f3; }
@@ -348,7 +349,7 @@ function renderPage(sessionPath, sessionName, sessionNames, entries) {
 </head>
 <body>
   <main class="wrap">
-    <section class="title">codex-focus-ui v0.1.0</section>
+    <section class="title">codex-focus-ui v${escapeHtml(META.version)}</section>
     ${CONFIG._configError ? `<section class="warning">配置文件异常：${escapeHtml(CONFIG._configError)}，当前已回退默认配置。</section>` : ""}
     <section class="hotkeys">快捷键：<code>J</code> 定位上一轮提问，<code>/</code> 聚焦搜索框，<code>T</code>/<code>B</code> 快速到顶部/底部。</section>
     <section class="toolbar">
@@ -712,7 +713,7 @@ function startServer() {
   });
 
   server.listen(PORT, () => {
-    console.log(`[codex-focus-ui viewer] v0.1.0 running at http://127.0.0.1:${PORT}`);
+    console.log(`[codex-focus-ui viewer] v${META.version} running at http://127.0.0.1:${PORT}`);
     console.log("默认行为：命令输出折叠，支持悬浮上一问、会话切换、过滤、搜索、书签、Markdown 导出、会话删除。");
   });
 }
